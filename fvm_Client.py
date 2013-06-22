@@ -14,8 +14,23 @@ def FVMClient():
 	def remove_snapshot(dev):
 		self.lvm.lv_remove(dev)
 
-	def create_target():
+	def create_target(target_id, target_name, lun_dev):
+		acl = 'all'
+		lun_index = '1'
+		self.tgt.new_target(target_id, target_name)
+		self.tgt.bind_target(target_id, acl)
+		self.tgt.new_lun(target_id, lun_path, lun_index)
+
+	def remove_target(target_name):
+		target_id = self.tgt.target_name2target_id(target_name)
+		if target_id == None:
+			print 'No such target'
+			return
+		if self.tgt.delete_target(target_id) != None:
+			print 'failed to Disassemble Volume' + target_name
+
+	def assemble_volume():
 		pass
 
-	def remove_target():
+	def message():
 		pass
