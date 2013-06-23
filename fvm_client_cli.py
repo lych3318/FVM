@@ -42,9 +42,10 @@
 
 import cmd
 import argparse
+from fvm_client import *
 #from fvm_host_backend import *
 
-cfg = {}
+fvmclient = FVMClient()
 
 def ParseCMD(action, command):
 	print command, action
@@ -62,16 +63,9 @@ def ParseCMD(action, command):
 
 	arglist = []
 	if action=='config':
-		cfg['addr']=args.addr
-		cfg['port']=args.port
-		cfg['name']=args.name
-		cfg['hostaddr']=args.hostaddr
-		cfg['hostport']=args.hostport
-		print cfg
-		return
+		fvmclient.config(args.addr, args.port, args.name, args.hostaddr, args.hostport)
 	elif action=='register':
-		arglist = [cfg['hostaddr'], cfg['hostport'], cfg['name']]
-	DoAction(action, arglist)
+		fvmclient.register()
 
 class FVMCmd(cmd.Cmd):
 	"docstring for fvmcmd"

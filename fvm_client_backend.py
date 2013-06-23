@@ -1,12 +1,12 @@
 from fvm_client import *
 
-fvmclient = FVMClient()
-def DoAction(action, args):
-	if action=='register':
-		fvmhost.MountVolume(args[0], args[1])
+# fvmclient = FVMClient()
+# def DoAction(action, args):
+# 	if action=='register':
+# 		fvmhost.MountVolume(args[0], args[1])
 
-def ProcessMSG(msg):
-	pass
+# def ProcessMSG(msg):
+# 	pass
 
 if __name__=='__main__':
 	msgservice = MsgService()
