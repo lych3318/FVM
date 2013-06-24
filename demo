@@ -1,7 +1,8 @@
-fvm_client_cli:command
+fvm_client_cli: config - mount - register - remove
 config --addr 192.168.122.1 --port 5921 --name asdf --hostaddr 192.168.122.1 --hostport 5921
 assemble --volume /dev/mapper/cg-data
 register
+disassemble
 
-fvm_host_cli:command
+fvm_host_cli:command -- mount
 mount --name asdf

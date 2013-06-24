@@ -73,7 +73,7 @@ def ParseCMD(action, command):
 	elif action=='assemble':
 		fvmclient.AssembleVolume(args.volume, args.size)
 	elif action=='disassemble':
-		fvmclient.DisassembleVolume(args.name)
+		fvmclient.DisassembleVolume()
 	# elif action=='status':
 	# 	fvmclient.PrintStatus()
 

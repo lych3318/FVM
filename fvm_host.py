@@ -9,6 +9,7 @@ import subprocess
 
 cfg = {}
 remote_volume = {}
+volume_dev = {}
 
 def WriteFile(path, dic):
 	fp = open(path, 'w')
@@ -32,6 +33,11 @@ class FVMHost():
 	def load(self):
 		path='/root/workspace/FVM/data/cfg_host'
 		ReadFile(path, cfg)
+		path='/root/workspace/FVM/data/remote_volume'
+		ReadFile(path, remote_volume)
+		#This is valid when is the program restart, not system reboot
+		path='/root/workspace/FVM/data/volume_dev'
+		ReadFile(path, volume_dev)
 
 	def config(self, addr, port, name, root):
 		path='/root/workspace/FVM/data/cfg_host'
@@ -46,8 +52,8 @@ class FVMHost():
 		if nodelist is not None :
 			for node in nodelist:
 				if node.name == target_name:
-					nodelist[0].login()
-					return scandev.get_blockdev_by_targetname(nodelist[0].name)
+					#nodelist[0].login()
+					return '/dev/'+scandev.get_blockdev_by_targetname(nodelist[0].name)
 			print 'Target %s not found!' % (target_name)
 		else:
 			print 'no node found!'
@@ -59,21 +65,45 @@ class FVMHost():
 				if node.name == target_name:
 					nodelist[0].logout()		
 
+	def MkDir(self, dirname):
+		#command = 'mkdir '+cfg['root']+'/'+dirname
+		#subprocess(command)
+		#return cfg['root']+'/'+dirname
+		dirpath = cfg['root']+'/'+dirname
+		os.mkdir(dirpath)
+		return dirpath
+
+	def RmDir(self, name):
+		devpath = volume_dev[name]
+		dirpath = volume_dev[devpath]
+		command = 'rm -r '+dirpath
+		os.system(command)
+
 	def MountVolume(self, name):
 		path = '/root/workspace/FVM/data/remote_volume'
 		ReadFile(path, remote_volume)
 		addr = remote_volume[name]
 		print name, addr
-		devname = self.TargetLogin(addr, 'fvm_'+name)
-		print devname
-		# command = 'mount '+dev+' '+
-		# subprocess(command)
+		devpath = self.TargetLogin(addr, 'fvm_'+name)
+		volume_dev[name] = devpath
+		print devpath
 
-	def UmountVolume(self, dev):
-		command = 'Umount '+dev
-		subprocess(command)
-		self.TargetLogout(addr, name)
+		dirpath = self.MkDir(name)
+		command = 'mount '+devpath+' '+dirpath
+		os.system(command)
+		volume_dev[devpath] = dirpath
+
+		path = '/root/workspace/FVM/data/volume_dev'
+		WriteFile(path, volume_dev)
+
+	def UmountVolume(self, name):
+		addr = remote_volume[name]
+		devpath = volume_dev[name]
+		command = 'umount '+devpath
+		os.system(command)
+		self,RmDir(name)		
+		self.TargetLogout(addr, 'fvm_'+name)
 
 	def CleanCache(self, dev):
 		command = 'flashcache_invalidate '+dev
-		subprocess(command)
+		os.system(command)

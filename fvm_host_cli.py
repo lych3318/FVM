@@ -24,6 +24,8 @@ def ParseCMD(action, command):
 		fvmhost.config(args.addr, args.port, args.name, args.root)
 	elif action=='mount':
 		fvmhost.MountVolume(args.name)
+	elif action=='umount':
+		fvmhost.UmountVolume(args.name)
 
 
 	#subparsers = parser.add_subparsers(help='sub-command help')

@@ -89,7 +89,8 @@ class FVMClient():
 		path='/root/workspace/FVM/data/target'
 		WriteFile(path, target)
 
-	def DisassembleVolume(self, name):
+	def DisassembleVolume(self):
+		name = cfg['name']
 		target_name = 'fvm_'+name
 		snap_name = target['prefix']+'-snap_'+name
 		self.remove_target(target_name)
