@@ -101,7 +101,7 @@ class FVMHost():
 		devpath = volume_dev[name]
 		command = 'umount '+devpath
 		os.system(command)
-		self,RmDir(name)		
+		self.RmDir(name)		
 		self.TargetLogout(addr, 'fvm_'+name)
 
 	def CleanCache(self, dev):
