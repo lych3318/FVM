@@ -6,7 +6,7 @@ import libiscsi
 import iscsi.scandev
 import subprocess
 
-def FVMHost():
+class FVMHost():
 	def __init__():
 		pass
 
@@ -31,24 +31,16 @@ def FVMHost():
 				if node.name == target_name:
 					nodelist[0].logout()		
 
-	def MountVolume(self, dev, dir_root):
-		command = 'mount '+dev+' '+dir_root
+	def MountVolume(self, dev, dir):
+		self.TargetLogin(addr, name)
+		command = 'mount '+dev+' '+
 		subprocess(command)
 
 	def UmountVolume(self, dev):
 		command = 'Umount '+dev
 		subprocess(command)
+		self.TargetLogout(addr, name)
 
 	def CleanCache(self, dev):
 		command = 'flashcache_invalidate '+dev
 		subprocess(command)
-
-msgservice = MsgService()
-def serve(sock, addr):
-	msgservice.recvmsg(sock)
-
-host = '0.0.0.0'
-port = 5921
-print 'starting message service on %s:%s\n' % (host, port)
-msgserver = StreamServer((host,port), serve)
-msgserver.serve_forever()
