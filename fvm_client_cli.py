@@ -63,7 +63,7 @@ def ParseCMD(action, command):
 	parser.add_argument('--size', type=str, default='20', help='snap volume size')
 
 	args = parser.parse_args(command.split())
-	print type(args)
+	#print type(args)
 
 	arglist = []
 	if action=='config':

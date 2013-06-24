@@ -85,7 +85,7 @@ class FVMClient():
 		target['original_volume'] = dev
 		target['volgroup'] = (os.path.basename(dev).split('-'))[0]
 		target['prefix'] = os.path.dirname(dev)+'/'+target['volgroup']
-		self.create_target(target['prefix']+'/snap_'+name, 'fvm_'+name)
+		self.create_target(target['prefix']+'-snap_'+name, 'fvm_'+name)
 		path='/root/workspace/FVM/data/target'
 		WriteFile(path, target)
 

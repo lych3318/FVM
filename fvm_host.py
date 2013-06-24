@@ -46,7 +46,7 @@ class FVMHost():
 		if nodelist is not None :
 			for node in nodelist:
 				if node.name == target_name:
-					#nodelist[0].login()
+					nodelist[0].login()
 					return scandev.get_blockdev_by_targetname(nodelist[0].name)
 			print 'Target %s not found!' % (target_name)
 		else:

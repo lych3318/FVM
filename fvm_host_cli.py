@@ -19,7 +19,6 @@ def ParseCMD(action, command):
 	parser.add_argument('--root', type=str, help='root directory')
 
 	args = parser.parse_args(command.split())
-	print type(args)
 
 	if action=='config':
 		fvmhost.config(args.addr, args.port, args.name, args.root)
