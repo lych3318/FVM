@@ -57,6 +57,10 @@ def ParseCMD(action, command):
 	#remote host configuration
 	parser.add_argument('--hostaddr', type=str, help='host ip address')
 	parser.add_argument('--hostport', type=str, default='5921', help='ip address')
+	#assemble volume parameters
+	parser.add_argument('--volume', type=str, help='original volume')
+	#parser.add_argument('--volname', type=str, help='host ip address')
+	parser.add_argument('--size', type=str, default='20', help='snap volume size')
 
 	args = parser.parse_args(command.split())
 	print type(args)
@@ -66,6 +70,12 @@ def ParseCMD(action, command):
 		fvmclient.config(args.addr, args.port, args.name, args.hostaddr, args.hostport)
 	elif action=='register':
 		fvmclient.register()
+	elif action=='assemble':
+		fvmclient.AssembleVolume(args.volume, args.name, args.size)
+	elif action=='disassemble':
+		fvmclient.DisassembleVolume(args.name)
+	elif action=='status':
+		fvmclient.PrintStatus()
 
 class FVMCmd(cmd.Cmd):
 	"docstring for fvmcmd"

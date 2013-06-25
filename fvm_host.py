@@ -6,6 +6,9 @@ import libiscsi
 import iscsi.scandev
 import subprocess
 
+def readfile(path):
+	fp = open(path)
+
 class FVMHost():
 	def __init__():
 		pass

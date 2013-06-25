@@ -15,6 +15,7 @@ class MsgService():
 			print 'msg received is: ' + line
 			if not line:
 				break
+			return line
 
 	def quit(self, sock):
 		sock.close()

@@ -4,6 +4,12 @@ import argparse
 
 cfg = {}
 
+def WriteFile(path, cfg):
+	fp = open(path)
+	for key in cfg.keys():
+		line = key+' '+cfg[key]+'\n'
+		fp.write(line)
+
 def ParseCMD(action, command):
 	print command, action
 
@@ -17,10 +23,12 @@ def ParseCMD(action, command):
 	print type(args)
 
 	if action=='config':
+		path='/root/workspace/FVM/data/cfg_host'
 		cfg['addr']=args.addr
 		cfg['port']=args.port
 		cfg['name']=args.name
 		cfg['root']=args.root
+		WriteFile(path, cfg)
 		print cfg
 	else:
 		DoAction()
