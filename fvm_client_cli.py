@@ -71,11 +71,11 @@ def ParseCMD(action, command):
 	elif action=='register':
 		fvmclient.register()
 	elif action=='assemble':
-		fvmclient.AssembleVolume(args.volume, args.name, args.size)
+		fvmclient.AssembleVolume(args.volume, args.size)
 	elif action=='disassemble':
 		fvmclient.DisassembleVolume(args.name)
-	elif action=='status':
-		fvmclient.PrintStatus()
+	# elif action=='status':
+	# 	fvmclient.PrintStatus()
 
 class FVMCmd(cmd.Cmd):
 	"docstring for fvmcmd"

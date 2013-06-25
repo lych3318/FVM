@@ -106,7 +106,17 @@ class Tgt:
 			if cmp(target.name, target_name)==0:
 				return target.id
 		return None
-		
+	
+	def tgt_setup_lun(self, name, dev):
+		argv = list()
+		argv = ['tgt-setup-lun', '-n', name, '-d', dev]
+		(status, output) = process_call_argv(argv)
+		if status != 0:
+			logging.info(output)
+			return output
+		logging.info('New target successfully, target id: {0}'.format(target_id))
+		return None
+
 	def new_target(self, target_id, target_name):
 		argv = list()
 		argv=buildArguments(mode='target', op='new', tid=target_id, T=target_name)

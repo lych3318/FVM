@@ -7,28 +7,32 @@ import os, random
 cfg = {}
 target = {}
 
-def WriteFile(path, cfg):
+def WriteFile(path, dic):
 	fp = open(path, 'w')
-	for key in cfg.keys():
-		line = key+' '+cfg[key]+'\n'
+	for key in dic.keys():
+		line = key+' '+dic[key]+'\n'
 		fp.write(line)
+
+def ReadFile(path, dic):
+	fp = open(path)
+	while True:
+		line = fp.readline()
+		if len(line) == 0:
+			break;
+		key, value = line.split()
+		dic[key] = value
+	print dic
 
 class FVMClient():
 	def __init__(self):
 		self.lvm = LVM2()
 		self.lvm.load()
 		self.tgt = Tgt()
-		self.load('/root/workspace/FVM/data/cfg_client')
+		self.load('/root/workspace/FVM/data/cfg_client', cfg)
+		self.load('/root/workspace/FVM/data/target', target)
 
-	def load(self, config_file):
-		fp = open(config_file)
-		while True:
-			line = fp.readline()
-			if len(line) == 0:
-				break;
-			key, value = line.split()
-			cfg[key] = value
-		print cfg
+	def load(self, path, dic):
+		ReadFile(path, dic)
 
 	def config(self, addr, port, name, hostaddr, hostport):
 		cfg['addr']=addr
@@ -45,23 +49,27 @@ class FVMClient():
 
 	def create_snapshot(self, original_dev, snap_name, size):
 		self.lvm.lv_create_snapshot(original_dev, snap_name, size)
-		self.snap_name = snap_name
+		target['snap_name'] = snap_name
 
 	def remove_snapshot(self, dev):
 		self.lvm.lv_remove(dev)
 
+	# def create_target(self, lun_path, target_name):
+	# 	self.tgt.tgt_setup_lun(target_name, lun_path)
+	# 	target['target_name'] = target_name
+
 	def create_target(self, lun_path, target_name):
-		acl = 'all'
+		acl = 'ALL'
 		lun_index = '1'
 		while True:
-			target_id = str(random.randint(0,1024))
+			target_id = str(random.randint(0,10))
 			if not self.tgt.is_in_targetlist(target_id):
 				break 
 		self.tgt.new_target(target_id, target_name)
 		self.tgt.bind_target(target_id, acl)
 		self.tgt.new_lun(target_id, lun_path, lun_index)
-		self.target_id = target_id
-		self.target_name = target_name
+		target['target_id'] = target_id
+		target['target_name'] = target_name
 
 	def remove_target(self, target_name):
 		target_id = self.tgt.target_name2target_id(target_name)
@@ -71,19 +79,24 @@ class FVMClient():
 		if self.tgt.delete_target(target_id) != None:
 			print 'failed to Disassemble Volume' + target_name
 
-	def AssembleVolume(self, dev, name, size):
+	def AssembleVolume(self, dev, size):
+		name = cfg['name']
 		self.create_snapshot(dev, 'snap_'+name, size)
-		self.create_target(dev, 'fvm_'+name)
-		self.original_volume = dev
-		self.volgroup = (os.path.basename(dev).split('-'))[0]
-		self.prefix = os.path.dirname(dev)+'/'+self.volgroup
-		self.PrintStatus()
+		target['original_volume'] = dev
+		target['volgroup'] = (os.path.basename(dev).split('-'))[0]
+		target['prefix'] = os.path.dirname(dev)+'/'+target['volgroup']
+		self.create_target(target['prefix']+'/snap_'+name, 'fvm_'+name)
+		path='/root/workspace/FVM/data/target'
+		WriteFile(path, target)
 
 	def DisassembleVolume(self, name):
 		target_name = 'fvm_'+name
-		snap_name = self.prefix+'-snap_'+name
+		snap_name = target['prefix']+'-snap_'+name
 		self.remove_target(target_name)
 		self.remove_snapshot(snap_name)
+		target.clear()
+		path='/root/workspace/FVM/data/target'
+		WriteFile(path, target)
 
 	def SendMessage(self, addr, port, msg):
 		sock = socket.socket()
@@ -104,8 +117,8 @@ class FVMClient():
 	# 	msg = 'volume updata finished'
 	# 	self.message(host_addr, host_port, msg)
 
-	def PrintStatus(self):
-		print 'original volume: '+self.original_volume
-		print 'snapshot volume: '+self.snap_name
-		print 'target id:       '+self.target_id
-		print 'target name:     '+self.target_name
+	# def PrintStatus(self):
+	# 	print 'original volume: '+self.original_volume
+	# 	print 'snapshot volume: '+self.snap_name
+	# 	print 'target id:       '+self.target_id
+	# 	print 'target name:     '+self.target_name

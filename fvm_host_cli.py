@@ -1,8 +1,6 @@
 import cmd
 import argparse
-#from fvm_host_backend import *
-
-cfg = {}
+from fvm_host import *
 
 def WriteFile(path, cfg):
 	fp = open(path)
@@ -10,6 +8,7 @@ def WriteFile(path, cfg):
 		line = key+' '+cfg[key]+'\n'
 		fp.write(line)
 
+fvmhost = FVMHost()
 def ParseCMD(action, command):
 	print command, action
 
@@ -23,15 +22,9 @@ def ParseCMD(action, command):
 	print type(args)
 
 	if action=='config':
-		path='/root/workspace/FVM/data/cfg_host'
-		cfg['addr']=args.addr
-		cfg['port']=args.port
-		cfg['name']=args.name
-		cfg['root']=args.root
-		WriteFile(path, cfg)
-		print cfg
-	else:
-		DoAction()
+		fvmhost.config(args.addr, args.port, args.name, args.root)
+	elif action=='mount':
+		fvmhost.MountVolume(args.name)
 
 
 	#subparsers = parser.add_subparsers(help='sub-command help')
