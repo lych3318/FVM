@@ -78,6 +78,8 @@ class FVMHost():
 		dirpath = volume_dev[devpath]
 		command = 'rm -r '+dirpath
 		os.system(command)
+		
+	def CreateCacheDev():
 
 	def MountVolume(self, name):
 		path = '/root/workspace/FVM/data/remote_volume'
@@ -89,6 +91,9 @@ class FVMHost():
 		print devpath
 
 		dirpath = self.MkDir(name)
+		# flashcache
+
+		# flashcache
 		command = 'mount '+devpath+' '+dirpath
 		os.system(command)
 		volume_dev[devpath] = dirpath
