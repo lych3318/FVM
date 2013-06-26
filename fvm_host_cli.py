@@ -10,20 +10,22 @@ def WriteFile(path, cfg):
 
 fvmhost = FVMHost()
 def ParseCMD(action, command):
-	print command, action
-
+	#print command, action
 	parser = argparse.ArgumentParser(prog = 'fvm', description='Process FVM host command')
 	parser.add_argument('--addr', type=str, help='ip address')
 	parser.add_argument('--port', type=str, help='port', default='5921')
 	parser.add_argument('--name', type=str, help='name')
 	parser.add_argument('--root', type=str, help='root directory')
+	# parameters for mount volume: cache dev size, volume group it belongs to
+	parser.add_argument('--size', type=str, default='100', help='volume cache size')
+	parser.add_argument('--volgroup', type=str, help='volume group')
 
 	args = parser.parse_args(command.split())
 
 	if action=='config':
 		fvmhost.config(args.addr, args.port, args.name, args.root)
 	elif action=='mount':
-		fvmhost.MountVolume(args.name)
+		fvmhost.MountVolume(args.name, size=args.size, volgroup=args.volgroup)
 	elif action=='umount':
 		fvmhost.UmountVolume(args.name)
 

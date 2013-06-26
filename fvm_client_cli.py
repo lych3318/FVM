@@ -48,7 +48,7 @@ from fvm_client import *
 fvmclient = FVMClient()
 
 def ParseCMD(action, command):
-	print command, action
+	#print command, action
 
 	parser = argparse.ArgumentParser(prog = 'fvm', description='Process FVM host command')
 	parser.add_argument('--addr', type=str, help='ip address')

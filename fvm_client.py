@@ -93,6 +93,7 @@ class FVMClient():
 		name = cfg['name']
 		target_name = 'fvm_'+name
 		snap_name = target['prefix']+'-snap_'+name
+		print target_name
 		self.remove_target(target_name)
 		self.remove_snapshot(snap_name)
 		target.clear()

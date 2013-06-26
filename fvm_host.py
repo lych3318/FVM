@@ -1,3 +1,4 @@
+from pylvm2.lvm_ctrl import *
 from gevent.server import StreamServer
 import gevent.socket as socket
 from msgservice import MsgService
@@ -28,6 +29,8 @@ def ReadFile(path, dic):
 
 class FVMHost():
 	def __init__(self):
+		self.lvm = LVM2()
+		self.lvm.load()
 		self.load()
 
 	def load(self):
@@ -52,7 +55,7 @@ class FVMHost():
 		if nodelist is not None :
 			for node in nodelist:
 				if node.name == target_name:
-					#nodelist[0].login()
+					nodelist[0].login()
 					return '/dev/'+scandev.get_blockdev_by_targetname(nodelist[0].name)
 			print 'Target %s not found!' % (target_name)
 		else:
@@ -74,37 +77,85 @@ class FVMHost():
 		return dirpath
 
 	def RmDir(self, name):
-		devpath = volume_dev[name]
-		dirpath = volume_dev[devpath]
+		dirpath = cfg['root']+'/'+name
 		command = 'rm -r '+dirpath
 		os.system(command)
 		
-	def CreateCacheDev():
+	def CreateVolume(self, lv_name, size, volgroup):
+		self.lvm.lv_create(volgroup, lv_name, size)
+		return '/dev/mapper/'+volgroup+'-'+lv_name
 
-	def MountVolume(self, name):
-		path = '/root/workspace/FVM/data/remote_volume'
-		ReadFile(path, remote_volume)
-		addr = remote_volume[name]
-		print name, addr
-		devpath = self.TargetLogin(addr, 'fvm_'+name)
-		volume_dev[name] = devpath
-		print devpath
+	def RemoveVolume(self, dev):
+		self.lvm.lv_remove(dev)
 
-		dirpath = self.MkDir(name)
-		# flashcache
-
-		# flashcache
-		command = 'mount '+devpath+' '+dirpath
+	def CreateCacheDev(self, devname, ssd_dev, disk_dev, size):
+		command = 'flashcache_create -p back -s %sM %s %s %s' % (size, devname, ssd_dev, disk_dev)
 		os.system(command)
-		volume_dev[devpath] = dirpath
+		return '/dev/mapper/'+devname
+
+	def DestroyCacheDev(self, ssd_dev):
+		command = 'flashcache_destroy %s' % (ssd_dev)
+		os.system(command)
+
+	def LoadCacheDev(self, ssd_dev):
+		command = 'flashcache_load '+ssd_dev
+		os.system(command)
+
+	def IsDevExists(self, dev):
+		return os.path.exists(dev)
+
+	#def MountVolume(self, name, size, volgroup):
+	def MountVolume(self, name, **kwargs):
+		disk_name = name+'_disk'
+		ssd_name = name+'_ssd'
+		cachedev_name = name+'_cachedev'
+		if volume_dev.has_key(disk_name):#this volume has been connected before
+			disk_dev = volume_dev[disk_name]
+			if not self.IsDevExists(disk_dev):#check if the volume is being connected
+				path = '/root/workspace/FVM/data/remote_volume'
+				ReadFile(path, remote_volume)
+				addr = remote_volume[name]
+				print name, addr
+				disk_dev = self.TargetLogin(addr, 'fvm_'+name)
+				volume_dev[disk_name] = disk_dev
+				print disk_dev
+		else:
+			path = '/root/workspace/FVM/data/remote_volume'
+			ReadFile(path, remote_volume)
+			addr = remote_volume[name]
+			print name, addr
+			disk_dev = self.TargetLogin(addr, 'fvm_'+name)
+			volume_dev[disk_name] = disk_dev
+			print disk_dev
+
+		if volume_dev.has_key(ssd_name):# check if the ssd cache has been created
+			ssd_dev = volume_dev[ssd_name]
+			#flashcache_load
+			self.LoadCacheDev(ssd_dev)
+			#flashcache_load
+		else:
+			size = kwargs['size']
+			volgroup = kwargs['volgroup']
+			# flashcache_create
+			ssd_dev = self.CreateVolume('fvm_cache_'+name, size, volgroup)
+			cachedev = self.CreateCacheDev('fvm_cachedev_'+name, ssd_dev, disk_dev, size)
+			# flashcache_create
+			volume_dev[ssd_name] = ssd_dev
+			volume_dev[cachedev_name] = cachedev
+
+		cachedev = volume_dev[cachedev_name]
+		dirpath = self.MkDir(name)
+		command = 'mount '+cachedev+' '+dirpath
+		os.system(command)
 
 		path = '/root/workspace/FVM/data/volume_dev'
 		WriteFile(path, volume_dev)
 
 	def UmountVolume(self, name):
+		cachedev_name=name+'_cachedev'
 		addr = remote_volume[name]
-		devpath = volume_dev[name]
-		command = 'umount '+devpath
+		cachedev = volume_dev[cachedev_name]
+		command = 'umount '+cachedev
 		os.system(command)
 		self.RmDir(name)		
 		self.TargetLogout(addr, 'fvm_'+name)
