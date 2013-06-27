@@ -65,7 +65,6 @@ def ParseCMD(action, command):
 	args = parser.parse_args(command.split())
 	#print type(args)
 
-	arglist = []
 	if action=='config':
 		fvmclient.config(args.addr, args.port, args.name, args.hostaddr, args.hostport)
 	elif action=='register':
@@ -74,6 +73,8 @@ def ParseCMD(action, command):
 		fvmclient.AssembleVolume(args.volume, args.size)
 	elif action=='disassemble':
 		fvmclient.DisassembleVolume()
+	elif action=='updata':
+		fvmclient.UpdataVolume()
 	# elif action=='status':
 	# 	fvmclient.PrintStatus()
 

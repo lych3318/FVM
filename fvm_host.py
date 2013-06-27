@@ -109,12 +109,13 @@ class FVMHost():
 		disk_name = name+'_disk'
 		ssd_name = name+'_ssd'
 		cachedev_name = name+'_cachedev'
+		disk_dev_uuid = "/dev/disk/by-uuid/"+remote_volume[name+'_uuid']
 		if volume_dev.has_key(disk_name):#this volume has been connected before
-			disk_dev = volume_dev[disk_name]
+			disk_dev = disk_dev_uuid
 			if not self.IsDevExists(disk_dev):#check if the volume is being connected
 				path = '/root/workspace/FVM/data/remote_volume'
 				ReadFile(path, remote_volume)
-				addr = remote_volume[name]
+				addr = remote_volume[name+'_addr']
 				print name, addr
 				disk_dev = self.TargetLogin(addr, 'fvm_'+name)
 				volume_dev[disk_name] = disk_dev
@@ -122,11 +123,12 @@ class FVMHost():
 		else:
 			path = '/root/workspace/FVM/data/remote_volume'
 			ReadFile(path, remote_volume)
-			addr = remote_volume[name]
+			addr = remote_volume[name+'_addr']
 			print name, addr
 			disk_dev = self.TargetLogin(addr, 'fvm_'+name)
 			volume_dev[disk_name] = disk_dev
 			print disk_dev
+		
 
 		if volume_dev.has_key(ssd_name):# check if the ssd cache has been created
 			ssd_dev = volume_dev[ssd_name]
@@ -138,7 +140,7 @@ class FVMHost():
 			volgroup = kwargs['volgroup']
 			# flashcache_create
 			ssd_dev = self.CreateVolume('fvm_cache_'+name, size, volgroup)
-			cachedev = self.CreateCacheDev('fvm_cachedev_'+name, ssd_dev, disk_dev, size)
+			cachedev = self.CreateCacheDev('fvm_cachedev_'+name, ssd_dev, disk_dev_uuid, size)
 			# flashcache_create
 			volume_dev[ssd_name] = ssd_dev
 			volume_dev[cachedev_name] = cachedev
@@ -153,9 +155,11 @@ class FVMHost():
 
 	def UmountVolume(self, name):
 		cachedev_name=name+'_cachedev'
-		addr = remote_volume[name]
+		addr = remote_volume[name+'_addr']
 		cachedev = volume_dev[cachedev_name]
 		command = 'umount '+cachedev
+		os.system(command)
+		command = 'dmsetup remove '+os.path.basename(cachedev)
 		os.system(command)
 		self.RmDir(name)		
 		self.TargetLogout(addr, 'fvm_'+name)

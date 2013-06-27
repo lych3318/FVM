@@ -2,7 +2,7 @@ from pylvm2.lvm_ctrl import *
 from pytgt.tgt_ctrl import *
 import iscsi.scandev
 from msgservice import *
-import os, random
+import os, random, subprocess
 
 cfg = {}
 target = {}
@@ -22,6 +22,12 @@ def ReadFile(path, dic):
 		key, value = line.split()
 		dic[key] = value
 	print dic
+
+def GetVolumeUUID(volume_path):
+	argv = ['blkid', '-o', 'value', volume_path]
+	process = subprocess.Popen(argv, stdout=subprocess.PIPE, shell=False)
+	output = process.stdout.readline()
+	return output
 
 class FVMClient():
 	def __init__(self):
@@ -44,7 +50,7 @@ class FVMClient():
 		WriteFile(path, cfg)
 
 	def register(self):
-		msg = 'register '+cfg['name']+' '+cfg['addr']+' '+cfg['port']
+		msg = 'register '+cfg['name']+' '+cfg['addr']+' '+cfg['port']+' '+target['UUID']
 		self.SendMessage(cfg['hostaddr'], int(cfg['hostport']), msg)
 
 	def create_snapshot(self, original_dev, snap_name, size):
@@ -86,8 +92,10 @@ class FVMClient():
 	def AssembleVolume(self, dev, size):
 		name = cfg['name']
 		target['original_volume'] = dev
+		target['UUID'] = GetVolumeUUID(dev)
 		target['volgroup'] = (os.path.basename(dev).split('-'))[0]
 		target['prefix'] = os.path.dirname(dev)+'/'+target['volgroup']
+		target['size'] = size
 		self.create_snapshot(dev, 'snap_'+name, size)
 		self.create_target(target['prefix']+'-snap_'+name, 'fvm_'+name)
 		path='/root/workspace/FVM/data/target'
@@ -107,23 +115,59 @@ class FVMClient():
 		return True
 
 	def SendMessage(self, addr, port, msg):
+		print addr, port
 		sock = socket.socket()
 		sock.connect((addr,port))
 		msgservice = MsgService()
 		msgservice.sendmsg(sock, msg)
+		sock.close()
 
-	# def VolumeUpdata(self):
-	# 	msg = 'volume updata start'
-	# 	self.message(host_addr, host_port, msg)
-	# 	# ret = self.message()
-	# 	# if ret = -1:
-	# 	# 	print 'Updata failed\n'
-	# 	self.remove_target()
-	# 	self.remove_snapshot()
-	# 	self.create_snapshot()
-	# 	self.create_target()
-	# 	msg = 'volume updata finished'
-	# 	self.message(host_addr, host_port, msg)
+	def RecvMessage(self):
+		addr = cfg['addr']
+		port = int(cfg['port'])
+		print addr, port
+		sock = socket.socket()
+		sock.bind((addr, port))
+		sock.listen(5)
+		while True:
+			connection,_ = sock.accept()
+			try:
+				connection.settimeout(10)
+				msg = connection.recv(1024)
+				print msg
+				break
+			except socket.timeout:
+				print 'time out--------------------------------'
+				return None
+		sock.close()
+		return msg
+		
+
+	def UpdataVolume(self):
+		msg = 'updata '+cfg['name']
+		hostaddr = cfg['hostaddr']
+		hostport = int(cfg['hostport'])
+		self.SendMessage(hostaddr, hostport, msg)
+		ret = self.RecvMessage()
+		if ret != 'finished':
+			print 'remote user not responded!'
+			return False
+		self.DisassembleVolume()
+
+		dev = target['original_volume']
+		size = target['size']
+		self.AssembleVolume(dev, size)
+		msg = 'updata_finished '+cfg['name']
+		self.SendMessage(hostaddr, hostport, msg)
+		# ret = self.message()
+		# if ret = -1:
+		# 	print 'Updata failed\n'
+		# self.remove_target()
+		# self.remove_snapshot()
+		# self.create_snapshot()
+		# self.create_target()
+		# msg = 'volume updata finished'
+		# self.message(host_addr, host_port, msg)
 
 	# def PrintStatus(self):
 	# 	print 'original volume: '+self.original_volume
