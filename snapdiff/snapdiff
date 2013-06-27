@@ -1,0 +1,323 @@
+#!/usr/bin/ruby
+
+# Transfer a set of changes made to the origin of a snapshot LV to another
+# block device, possibly using SSH to send to a remote system.
+#
+# Usage: Start with lvmsync --help, or read the README for all the gory
+# details.
+#
+
+require 'optparse'
+
+PROTOCOL_VERSION = "lvmsync PROTO[2]"
+
+def main()
+	# Parse me some options
+	options = {}
+	OptionParser.new do |opts|
+		opts.banner = "Usage: lvmsync [options]"
+		opts.separator ""
+		opts.separator "    lvmsync [--snapback <file>] <snapshot device> [--stdout | [<desthost>:]<destdevice>]"
+		opts.separator "    lvmsync [--snapback <file>] --apply <changes file> <destdevice>"
+		opts.separator ""
+		
+		opts.on("--server", "Run in server mode (deprecated; use '--apply -' instead)") do |v|
+			options[:server] = true
+		end
+		opts.on("-v", "--[no-]verbose",
+		        "Run verbosely") { |v| options[:verbose] = true }
+		opts.on("-b <file>", "--snapback <file>",
+		        "Make a backup snapshot file on the destination") do |v|
+			options[:snapback] = v
+		end
+		opts.on("-a", "--apply <file>",
+		        "Apply mode: write the contents of a snapback file to a device") do |v|
+			options[:apply] = v
+		end
+		opts.on("-s", "--stdout", "Write output data to stdout rather than another lvmsync process") do |v|
+			options[:stdout] = true
+		end
+	end.parse!
+	
+	if options[:apply]
+		if ARGV[0].nil?
+			$stderr.puts "No destination device specified."
+			exit 1
+		end
+		options[:device] = ARGV[0]
+		run_apply(options)
+	elsif options[:server]
+		$stderr.puts "--server is deprecated; please use '--apply -' instead"
+		if (ARGV[0].nil?)
+			$stderr.puts "No destination block device specified.  WTF?"
+			exit 1
+		end
+		options[:apply] = '-'
+		options[:device] = ARGV[0]
+		run_apply(options)
+	else
+		if ARGV[0].nil?
+			$stderr.puts "ERROR: No snapshot specified.  Exiting."
+			exit 1
+		end
+		options[:snapdev] = ARGV[0]
+
+		if (options[:stdout].nil? and ARGV[1].nil?)
+			$stderr.puts "No destination specified."
+			exit 1
+		end
+		if options[:stdout].nil?
+			dev, host = ARGV[1].split(':', 2).reverse
+			options[:desthost] = host
+			options[:destdev] = dev
+		end
+
+		run_client(options)
+	end
+end
+
+def run_apply(opts)
+	snapfile = opts[:snapback] ? File.open(opts[:snapback], 'w') : nil
+	infile   = opts[:apply] == '-' ? $stdin : File.open(opts[:apply], 'r')
+	destdev  = opts[:device]
+	
+	process_dumpdata(infile, destdev, snapfile)
+ensure
+	snapfile.close unless snapfile.nil?
+	infile.close unless infile.nil? or infile == $stdin
+end
+
+def process_dumpdata(instream, destdev, snapback = nil)
+	handshake = instream.readline.chomp
+	unless handshake == PROTOCOL_VERSION
+		$stderr.puts "Handshake failed; protocol mismatch? (saw '#{handshake}' expected '#{PROTOCOL_VERSION}'"
+		exit 1
+	end
+
+	File.open(destdev, 'w+') do |dest|
+		while header = instream.read(12)
+			offset, chunksize = header.unpack("QN")
+			offset = ntohq(offset)
+			dest.seek offset * chunksize
+			if snapback
+				snapback.write(header)
+				snapback.write dest.read(chunksize)
+				dest.seek offset * chunksize
+			end
+			dest.write instream.read(chunksize)
+		end
+	end
+end
+
+def run_client(opts)
+	snapshot = opts[:snapdev]
+	desthost = opts[:desthost]
+	destdev = opts[:destdev]
+	outfd = nil
+	
+	snapshotdm = canonicalise_dm(snapshot)
+
+	# First, read the dm table so we can see what we're dealing with
+	dmtable = read_dm_table
+	dmlist = read_dm_list
+
+	if dmlist[snapshotdm].nil?
+		$stderr.puts "Could not find dm device '#{snapshot}' (name mangled to '#{snapshotdm}')"
+		exit 1
+	end
+
+	if dmtable[snapshotdm][0][:type] != 'snapshot'
+		$stderr.puts "#{snapshot} does not appear to be a snapshot"
+		exit 1
+	end
+	
+	origindm = dm_from_devnum(dmtable[snapshotdm][0][:args][0], dmlist)
+	
+	if origindm.nil?
+		$stderr.puts "CAN'T HAPPEN: No origin device for #{snapshot} found"
+		exit 1
+	end
+
+	$stderr.puts "Found origin dm device: #{origindm}" if opts[:verbose]
+	
+	exceptiondm = dm_from_devnum(dmtable[snapshotdm][0][:args][1], dmlist)
+	
+	if exceptiondm.nil?
+		$stderr.puts "CAN'T HAPPEN: No exception list device for #{snapshot} found!"
+		exit 1
+	end
+
+	# Since, in principle, we're not supposed to be reading from the CoW
+	# device directly, the kernel makes no attempt to make the device's read
+	# cache stay in sync with the actual state of the device.  As a result,
+	# we have to manually drop all caches before the data looks consistent. 
+	# PERFORMANCE WIN!
+	File.open("/proc/sys/vm/drop_caches", 'w') { |fd| fd.print "3" }
+
+	$stderr.puts "Reading snapshot metadata from /dev/mapper/#{exceptiondm}" if opts[:verbose]
+	$stderr.puts "Reading changed chunks from /dev/mapper/#{origindm}" if opts[:verbose]
+
+	xfer_count = 0
+	total_size = 0
+	chunksize = nil
+	snapback = opts[:snapback] ? "--snapback #{opts[:snapback]}" : ''
+
+	if opts[:stdout]
+		outfd = $stdout
+	else
+		server_cmd = if desthost
+			"ssh #{desthost} lvmsync --apply - #{snapback} #{destdev}"
+		else
+			"lvmsync --apply - #{snapback} #{destdev}"
+		end
+		
+		outfd = IO.popen(server_cmd, 'w')
+	end
+	
+	outfd.puts PROTOCOL_VERSION
+	
+	File.open("/dev/mapper/#{origindm}", 'r') do |origindev|
+		File.open("/dev/mapper/#{exceptiondm}", 'r') do |snapdev|
+			File.open("/root/workspace/FVM/data/changedblocks", 'w') do |blocks|
+				chunksize = read_header(snapdev)
+					
+				snapdev.seek chunksize
+				in_progress = true
+				t = Time.now
+				while in_progress
+					(chunksize / 16).times do
+						origin_offset, snap_offset = snapdev.read(16).unpack("QQ")
+						origin_offset = ntohq(origin_offset)
+						snap_offset = ntohq(snap_offset)
+						if snap_offset == 0
+							in_progress = false
+							break
+						end
+						xfer_count += 1
+						blocks.puts "#{origin_offset}"
+						$stderr.puts "Sending chunk #{origin_offset}" if opts[:verbose]
+						origindev.seek origin_offset * chunksize
+						outfd.print [htonq(origin_offset), chunksize].pack("QN")
+						outfd.print origindev.read(chunksize)
+					end
+					snapdev.seek chunksize * chunksize / 16, IO::SEEK_CUR if in_progress
+					$stderr.printf "\r%iB/s", chunksize / (Time.now - t)
+					$stderr.flush
+					t = Time.now
+				end
+				blocks.puts "0 0"
+				blocks.puts "total_count: #{xfer_count}"
+			end
+		end
+		origindev.seek(0, IO::SEEK_END)
+		total_size = origindev.tell / 4096
+	end
+	
+	$stderr.puts "Transferred #{xfer_count} of #{total_size} chunks (#{chunksize} bytes per chunk)"
+	$stderr.puts "You saved #{(total_size - xfer_count) / total_size.to_f * 100}% of your transfer size!"
+ensure
+	outfd.close unless outfd.nil? or outfd == $stdout
+	
+end
+
+# Call dmsetup ls and turn that into a hash of dm_name => [maj, min] data.
+# Note that maj, min will be integers, and dm_name a string.
+def read_dm_list
+	dmlist = {}
+	`dmsetup ls`.split("\n").each do |l|
+		next unless l =~ /^(\S+)\s+\((\d+)(, |:)(\d+)\)$/
+		dmlist[$1] = [$2.to_i, $4.to_i]
+	end
+	dmlist
+end
+
+# Call dmsetup table and turn that into a complicated hash of dm table data.
+#
+# Structure is:
+#
+#   dm_name => [
+#     { :offset => int,
+#       :length => int,
+#       :type => (linear|snapshot|...),
+#       :args => [str, str, str]
+#     },
+#     { ... }
+#   ],
+#   dm_name => [ ... ]
+#
+# The arguments are kept as a list of strings (split on whitespace), and
+# you'll need to interpret them yourself.  Turning this whole shebang into a
+# class hierarchy is a task for another time.
+#
+def read_dm_table
+	dmtable = {}
+	`dmsetup table`.split("\n").each do |l|
+		next unless l =~ /^(\S+): (\d+) (\d+) (\S+) (.*)$/
+		dmtable[$1] ||= []
+		dmtable[$1] << { :offset => $2,
+		                 :length => $3,
+		                 :type => $4,
+		                 :args => $5.split(/\s+/)
+		               }
+	end
+	dmtable
+end
+
+# Take a device name in any number of different formats and turn it into a
+# "canonical" devicemapper name, equivalent to what you'll find in the likes
+# of dmsetup ls
+def canonicalise_dm(origname)
+	case origname
+		when %r{^/dev/mapper/(.+)$} then
+			$1
+		when %r{^/dev/([^/]+)/(.+)$} then
+			vg = $1
+			lv = $2
+			vg.gsub('-', '--') +
+			'-' +
+			lv.gsub('-', '--')
+		when %r{^([^/]+)/(.*)$} then
+			vg = $1
+			lv = $2
+			vg.gsub('-', '--') +
+			'-' +
+			lv.gsub('-', '--')
+		else
+			# Let's *assume* that the user just gave us vg-lv...
+			origname
+	end
+end
+
+# Find the name of a dm device that corresponds to the given <maj>:<min>
+# string provided.
+def dm_from_devnum(devnum, dmlist)
+	maj, min = devnum.split(':', 2)
+	dmlist.invert[[maj.to_i, min.to_i]]
+end
+
+# Read the header off our snapshot device, validate all is well, and return
+# the chunksize used by the snapshot, in bytes
+def read_header(snapdev)
+	magic, valid, metadata_version, chunksize = snapdev.read(16).unpack("VVVV")
+	raise RuntimeError.new("Invalid snapshot magic number") unless magic == 0x70416e53
+	raise RuntimeError.new("Snapshot marked as invalid") unless valid == 1
+	raise RuntimeError.new("Incompatible metadata version") unless metadata_version == 1
+	
+	# With all that out of the way, we can get down to business
+	chunksize * 512
+end
+
+# Are we on a big-endian system?  Needed for our htonq/ntohq methods
+def big_endian?
+	@bigendian ||= [1].pack("s") == [1].pack("n")
+end
+
+def htonq val
+	big_endian? ? ([val].pack("Q").reverse.unpack("Q").first) : val
+end
+
+def ntohq val
+	htonq val
+end
+
+main if __FILE__ == $0
