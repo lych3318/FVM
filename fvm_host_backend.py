@@ -59,6 +59,17 @@ def ProcessMSG(msg):
 		fvmhost = FVMHost()
 		fvmhost.MountVolume(args[1])
 		del fvmhost
+	elif args[0] == 'blocks' or args[0] == 'blocks_end':
+		path = '/root/workspace/FVM/data/blocks/'+args[1]
+		fp = open(path, 'a')
+		line = ''
+		for i in range(0, args[2]):
+			line = args[i+2]+' '+'1\n'
+		print line
+		fp.write(line)
+		if args[0] == 'blocks_end':
+			fvmhost.CleanCache(XX, path)
+
 
 def load():
 	path = '/root/workspace/FVM/data/remote_volume'

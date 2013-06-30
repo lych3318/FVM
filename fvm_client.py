@@ -55,7 +55,7 @@ class FVMClient():
 
 	def create_snapshot(self, original_dev, snap_name, size):
 		self.lvm.lv_create_snapshot(original_dev, snap_name, size)
-		target['snap_name'] = target['prefix']+'-'+snap_name
+		target['snap_dev'] = target['prefix']+'-'+snap_name
 
 	def remove_snapshot(self, dev):
 		return self.lvm.lv_remove(dev)
@@ -102,10 +102,10 @@ class FVMClient():
 		WriteFile(path, target)
 
 	def DisassembleVolume(self):
-		snap_name = target['snap_name']
+		snap_dev = target['snap_dev']
 		if not self.remove_target():
 			return False
-		ret = self.remove_snapshot(snap_name)
+		ret = self.remove_snapshot(snap_dev)
 		if ret != None:
 			print ret
 			return False
@@ -153,8 +153,26 @@ class FVMClient():
 			print 'remote user not responded!'
 			return False
 		self.DisassembleVolume()
-
+		#Get changed blocks and send the info to host
 		dev = target['original_volume']
+		snap_dev = target['snap_dev']
+		command = 'lvmsync '+snap_dev+' '+dev
+		path = '/root/workspace/FVM/data/changedblocks'
+		fp = open(path)
+		while True:
+			blocks = ''
+			i = 0
+			while i < 100:
+				block = fp.readline()
+				if len(block) == 0:
+					break
+				blocks += ' '+block
+				i += 1
+			msg = 'blocks '+str(i)+blocks
+			self.SendMessage(hostaddr, hostport, msg)
+			if len(block) == 0:
+				break
+		
 		size = target['size']
 		self.AssembleVolume(dev, size)
 		msg = 'updata_finished '+cfg['name']
