@@ -164,6 +164,7 @@ class FVMHost():
 		self.RmDir(name)		
 		self.TargetLogout(addr, 'fvm_'+name)
 
-	def CleanCache(self, dev):
-		command = 'flashcache_invalidate '+dev
+	def CleanCache(self, devname, path):
+		ssd_dev = volume_dev[devname+'_ssd']
+		command = 'flashcache_invalidate %s %s' % (ssd_dev, path)
 		os.system(command)

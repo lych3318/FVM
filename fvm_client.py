@@ -12,6 +12,7 @@ def WriteFile(path, dic):
 	for key in dic.keys():
 		line = key+' '+dic[key]+'\n'
 		fp.write(line)
+	fp.close()
 
 def ReadFile(path, dic):
 	fp = open(path)
@@ -21,12 +22,14 @@ def ReadFile(path, dic):
 			break;
 		key, value = line.split()
 		dic[key] = value
+	fp.close()
 	print dic
 
 def GetVolumeUUID(volume_path):
 	argv = ['blkid', '-o', 'value', volume_path]
 	process = subprocess.Popen(argv, stdout=subprocess.PIPE, shell=False)
-	output = process.stdout.readline()
+	output = process.stdout.readline().split()[0]
+	print output
 	return output
 
 class FVMClient():
@@ -130,9 +133,10 @@ class FVMClient():
 		sock.bind((addr, port))
 		sock.listen(5)
 		while True:
+			sock.settimeout(3)
 			connection,_ = sock.accept()
 			try:
-				connection.settimeout(10)
+				#connection.settimeout(10)
 				msg = connection.recv(1024)
 				print msg
 				break
@@ -142,15 +146,14 @@ class FVMClient():
 		sock.close()
 		return msg
 		
-
 	def UpdataVolume(self):
 		msg = 'updata '+cfg['name']
 		hostaddr = cfg['hostaddr']
 		hostport = int(cfg['hostport'])
 		self.SendMessage(hostaddr, hostport, msg)
 		ret = self.RecvMessage()
-		if ret != 'finished':
-			print 'remote user not responded!'
+		if ret != 'umounted':
+			print 'remote host not responded!'
 			return False
 		self.DisassembleVolume()
 		#Get changed blocks and send the info to host
@@ -168,10 +171,13 @@ class FVMClient():
 					break
 				blocks += ' '+block
 				i += 1
-			msg = 'blocks '+str(i)+blocks
-			self.SendMessage(hostaddr, hostport, msg)
 			if len(block) == 0:
+				msg = 'blocks_end '+str(i)+blocks
+				self.SendMessage(hostaddr, hostport, msg)
 				break
+			else:
+				msg = 'blocks '+str(i)+blocks
+				self.SendMessage(hostaddr, hostport, msg)
 		
 		size = target['size']
 		self.AssembleVolume(dev, size)

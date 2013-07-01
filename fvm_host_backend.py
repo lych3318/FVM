@@ -37,13 +37,14 @@ def ProcessMSG(msg):
 		remote_volume[args[1]+'_addr'] = args[2]
 		remote_volume[args[1]+'_port'] = args[3]
 		remote_volume[args[1]+'_uuid'] = args[4]
+		remote_volume[args[1]+'_stat'] = '0'
 		WriteFile(path, remote_volume)
 	elif args[0] == 'updata':
 		fvmhost = FVMHost()
 		fvmhost.UmountVolume(args[1])
 		del fvmhost
 
-		msg_back = 'finished'	
+		msg_back = 'umounted'	
 		addr = remote_volume[args[1]+'_addr']
 		port = int(remote_volume[args[1]+'_port'])
 		sock = socket.socket()
@@ -55,10 +56,13 @@ def ProcessMSG(msg):
 		print 'sending message----------------------------------------'
 		msgservice.sendmsg(sock, msg_back)
 		sock.close()
-	elif args[0] == 'updata_finished'
-		fvmhost = FVMHost()
-		fvmhost.MountVolume(args[1])
-		del fvmhost
+	elif args[0] == 'updata_finished':
+		path = '/root/workspace/FVM/data/remote_volume'
+		remote_volume[args[1]+'_stat'] = '1'
+		WriteFile(path, remote_volume)
+		# fvmhost = FVMHost()
+		# fvmhost.MountVolume(args[1])
+		# del fvmhost
 	elif args[0] == 'blocks' or args[0] == 'blocks_end':
 		path = '/root/workspace/FVM/data/blocks/'+args[1]
 		fp = open(path, 'a')
@@ -68,8 +72,14 @@ def ProcessMSG(msg):
 		print line
 		fp.write(line)
 		if args[0] == 'blocks_end':
-			fvmhost.CleanCache(XX, path)
-
+			fvmhost = FVMHost()
+			fvmhost.CleanCache(args[1], path)
+			while True:
+				if remote_volume[args[1]+'_stat'] == '1':
+					fvmhost.MountVolume(args[1])
+					break
+				import time
+				time.sleep(3)
 
 def load():
 	path = '/root/workspace/FVM/data/remote_volume'
